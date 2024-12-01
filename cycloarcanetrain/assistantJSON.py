@@ -3,7 +3,8 @@ import json
 def enforce_json_responses_jsonl(input_file, output_file):
     """
     Converts a JSONL dataset to enforce the Assistant responses to always be structured JSON.
-    Formats the responses in a way that aligns with the `### Human:` and `### Assistant:` schema.
+    Formats the responses in a way that aligns with the `### Human:` and `### Assistant:` schema,
+    and ensures proper handling of repeated or nested tags.
     
     Parameters:
     - input_file: Path to the input JSONL dataset.
@@ -22,21 +23,25 @@ def enforce_json_responses_jsonl(input_file, output_file):
                         continue
                     
                     text = item['text']
+                    # Ensure the text contains both Human and Assistant tags
                     if "### Human:" in text and "### Assistant:" in text:
-                        # Split into Human and Assistant sections
                         try:
-                            human_part, assistant_part = text.split("### Assistant:")
-                            assistant_response = assistant_part.strip()
+                            # Split into parts based on Human and Assistant tags
+                            human_parts = text.split("### Human:")
+                            formatted_text = ""
 
-                            # Avoid double escaping: use json.dumps only for the entire structure
-                            structured_response = {
-                                "response": assistant_response
-                            }
-                            
-                            # Build the new text with minimal escaping
-                            formatted_text = f"{human_part.strip()}### Assistant: {structured_response}"
-                            
-                            # Add the newly formatted item
+                            # Process each part of the conversation
+                            for i in range(1, len(human_parts)):  # Skip the first part as it's before the first Human tag
+                                human_part, assistant_part = human_parts[i].split("### Assistant:", 1)
+                                human_part = human_part.strip()
+                                assistant_part = assistant_part.strip()
+
+                                # Wrap Assistant response in JSON
+                                structured_response = {"response": assistant_part}
+
+                                # Rebuild the text
+                                formatted_text += f"### Human: {human_part}### Assistant: {json.dumps(structured_response, ensure_ascii=False)}"
+
                             formatted_data.append({"text": formatted_text})
                         except ValueError:
                             print(f"Skipping line due to incorrect format: {line.strip()}")
