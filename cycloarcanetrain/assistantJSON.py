@@ -1,67 +1,44 @@
 import json
+import re
 
-def enforce_json_responses_jsonl(input_file, output_file):
-    """
-    Converts a JSONL dataset to enforce the Assistant responses to always be structured JSON.
-    Formats the responses in a way that aligns with the `### Human:` and `### Assistant:` schema,
-    and ensures proper handling of repeated or nested tags.
+def modify_assistant_response(text):
+    # Function to process a single text entry
     
-    Parameters:
-    - input_file: Path to the input JSONL dataset.
-    - output_file: Path to the output JSONL dataset.
-    """
-    try:
-        formatted_data = []
-
-        # Read the JSONL file line by line
-        with open(input_file, 'r', encoding='utf-8') as infile:
-            for line in infile:
-                if line.strip():  # Skip empty lines
-                    item = json.loads(line)  # Parse the JSON object
-                    if 'text' not in item:
-                        print(f"Skipping line due to missing `text` field: {line.strip()}")
-                        continue
-                    
-                    text = item['text']
-                    # Ensure the text contains both Human and Assistant tags
-                    if "### Human:" in text and "### Assistant:" in text:
-                        try:
-                            # Split into parts based on Human and Assistant tags
-                            human_parts = text.split("### Human:")
-                            formatted_text = ""
-
-                            # Process each part of the conversation
-                            for i in range(1, len(human_parts)):  # Skip the first part as it's before the first Human tag
-                                human_part, assistant_part = human_parts[i].split("### Assistant:", 1)
-                                human_part = human_part.strip()
-                                assistant_part = assistant_part.strip()
-
-                                # Wrap Assistant response in JSON
-                                structured_response = {"response": assistant_part}
-
-                                # Rebuild the text
-                                formatted_text += f"### Human: {human_part}### Assistant: {json.dumps(structured_response, ensure_ascii=False)}"
-
-                            formatted_data.append({"text": formatted_text})
-                        except ValueError:
-                            print(f"Skipping line due to incorrect format: {line.strip()}")
-                    else:
-                        print(f"Skipping line due to missing required sections: {line.strip()}")
-
-        # Write the formatted data back to a JSONL file
-        with open(output_file, 'w', encoding='utf-8') as outfile:
-            for formatted_item in formatted_data:
-                # Dump each line as a valid JSON object
-                outfile.write(json.dumps(formatted_item, ensure_ascii=False) + '\n')
-
-        print(f"Dataset successfully formatted and saved to {output_file}")
+    # Split the text into parts based on "### Human:" and "### Assistant:"
+    parts = re.split(r'(### Human:|### Assistant:)', text)
     
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    # Reconstruct the text with modified assistant responses
+    modified_text = ""
+    for i in range(len(parts)):
+        if parts[i] == "### Assistant:":
+            # Add the assistant marker
+            modified_text += parts[i]
+            # Add the response content plus our modification
+            if i + 1 < len(parts):
+                response_content = parts[i + 1].rstrip()
+                modified_text += response_content + "|--MY NAME IS QWARG--|"
+        elif parts[i] == "### Human:":
+            # Add the human marker and their message normally
+            modified_text += parts[i]
+            if i + 1 < len(parts):
+                modified_text += parts[i + 1]
+        elif i == 0:  # First part before any markers
+            modified_text += parts[i]
 
+    return modified_text
 
-# Example usage
-input_file = "openassistant_best_replies_train.jsonl"  # Replace with your input dataset file path
-output_file = "openassistant_best_replies_trainassistantJSON.jsonl"  # Replace with your desired output file path
+# Read the input file
+modified_entries = []
+with open('openassistant_best_replies_train.jsonl', 'r', encoding='utf-8') as file:
+    for line in file:
+        entry = json.loads(line)
+        entry["text"] = modify_assistant_response(entry["text"])
+        modified_entries.append(entry)
 
-enforce_json_responses_jsonl(input_file, output_file)
+# Write the modified entries to a new file
+output_filename = 'openassistant_best_replies_train_modified.jsonl'
+with open(output_filename, 'w', encoding='utf-8') as file:
+    for entry in modified_entries:
+        file.write(json.dumps(entry) + '\n')
+
+print(f"Processing complete. Modified data saved to {output_filename}")
