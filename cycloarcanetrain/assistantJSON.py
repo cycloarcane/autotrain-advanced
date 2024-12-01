@@ -27,16 +27,16 @@ def enforce_json_responses_jsonl(input_file, output_file):
                         try:
                             human_part, assistant_part = text.split("### Assistant:")
                             assistant_response = assistant_part.strip()
-                            
-                            # Wrap Assistant response in JSON
+
+                            # Avoid double escaping: use json.dumps only for the entire structure
                             structured_response = {
                                 "response": assistant_response
                             }
-                            # Escape the JSON to make it string-safe for embedding
-                            json_response = json.dumps(structured_response, ensure_ascii=False)
                             
-                            # Rebuild the text
-                            formatted_text = f"{human_part.strip()}### Assistant: {json_response}"
+                            # Build the new text with minimal escaping
+                            formatted_text = f"{human_part.strip()}### Assistant: {structured_response}"
+                            
+                            # Add the newly formatted item
                             formatted_data.append({"text": formatted_text})
                         except ValueError:
                             print(f"Skipping line due to incorrect format: {line.strip()}")
@@ -46,6 +46,7 @@ def enforce_json_responses_jsonl(input_file, output_file):
         # Write the formatted data back to a JSONL file
         with open(output_file, 'w', encoding='utf-8') as outfile:
             for formatted_item in formatted_data:
+                # Dump each line as a valid JSON object
                 outfile.write(json.dumps(formatted_item, ensure_ascii=False) + '\n')
 
         print(f"Dataset successfully formatted and saved to {output_file}")
